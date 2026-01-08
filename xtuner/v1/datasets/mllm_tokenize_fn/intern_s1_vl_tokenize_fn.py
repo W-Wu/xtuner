@@ -24,8 +24,10 @@ from .base_mllm_tokenize_fn import (
     get_image_path,
     load_image,
     replace_image_token,
+    replace_ts_token,
 )
 from .intern_s1_vl_process import build_transform, dynamic_num_patch, dynamic_preprocess
+from .intern_s1_ts_process import build_ts_transform
 from .intern_s1_vl_utils import InternS1VLOSSLoader, pil_loader, read_interns1_vl_video
 
 
@@ -147,6 +149,9 @@ class InternS1VLTokenizeFunction(BaseMLLMTokenizeFunction[InternS1DataItem]):
         self.img_context_token_id = tokenizer.convert_tokens_to_ids(self.chat_template.image_context_token)
         self.video_context_token_id = tokenizer.convert_tokens_to_ids(self.chat_template.video_context_token)
         self.img_end_token_id = tokenizer.convert_tokens_to_ids(self.chat_template.image_end_token)
+        self.ts_start_token_id = tokenizer.convert_tokens_to_ids(self.chat_template.time_series_start_token)
+        self.ts_context_token_id = tokenizer.convert_tokens_to_ids(self.chat_template.time_series_context_token)
+        self.ts_end_token_id = tokenizer.convert_tokens_to_ids(self.chat_template.time_series_end_token)
 
         self.add_eos_token = add_eos_token
         self.add_bos_token = add_bos_token
@@ -165,6 +170,10 @@ class InternS1VLTokenizeFunction(BaseMLLMTokenizeFunction[InternS1DataItem]):
         transform = build_transform(
             is_train=self.data_augment, input_size=self.image_size, pad2square=False, normalize_type="imagenet"
         )
+        return transform
+    
+    def _get_ts_transform(self):
+        transform = build_ts_transform()
         return transform
 
     def pure_text_get_item(self, data_item: dict) -> InternS1DataItem:
@@ -365,6 +374,16 @@ class InternS1VLTokenizeFunction(BaseMLLMTokenizeFunction[InternS1DataItem]):
                 # f"conversations: {data_item['conversations']}"
             )
             return {"num_tokens": 0}
+        
+    def calc_num_tokens_time_series_get_item(self, data_item) -> CacheItem:
+        transform = self._get_ts_transform()
+        _, ts_len, sampling_rate = transform(self._time_series_path, self._time_series_sampling_rate)
+        stride = torch.floor(160/((1+torch.exp(-sampling_rate/100))**6))
+        patch_size = stride * 2
+        embed_length = (torch.ceil((ts_len - patch_size) / stride) + 1).long()
+        num_ts_token=(embed_length // 2 + 1) // 2
+        return {"num_tokens": num_ts_token}
+
 
     def video_get_item(self, data_item: dict, media_root: str = "") -> InternS1DataItem:
         num_image_tokens_list = []
@@ -442,6 +461,53 @@ class InternS1VLTokenizeFunction(BaseMLLMTokenizeFunction[InternS1DataItem]):
             num_tokens=len(input_ids),
             num_img_tokens=[total_image_tokens],
             num_imgs=num_imgs_list,
+        )
+        return ret
+    
+    def time_series_get_item(self, data_item, media_root = "")-> InternS1DataItem:
+        transform = self._get_ts_transform()
+        ts_values, ts_len, sampling_rate = transform(self._time_series_path, self._time_series_sampling_rate)
+        
+        stride = torch.floor(160/((1+torch.exp(-sampling_rate/100))**6))
+        patch_size = stride * 2
+        embed_length = (torch.ceil((ts_len - patch_size) / stride) + 1).long()
+        num_ts_tokens=(embed_length // 2 + 1) // 2
+
+        messages = ChatMessages(messages=data_item["messages"])
+        replace_ts_token(messages, self.chat_template, num_ts_tokens)
+        tokenized = messages.tokenize(self.tokenizer, self.chat_template)
+        input_ids = tokenized["input_ids"]
+        labels = tokenized["labels"]
+
+        is_pretrain = False
+        if len(messages.messages) == 1 and messages.messages[0].role == "pretrain":
+            is_pretrain = True
+        if is_pretrain:
+            if self.add_bos_token:
+                input_ids = [self.bos_token_id] + input_ids
+                labels = [self.bos_token_id] + labels
+            if self.add_eos_token:
+                input_ids = input_ids + [self.eos_token_id]
+                labels = labels + [self.eos_token_id]
+            np_labels = np.array(labels)
+            np_labels[np_labels == self.ts_start_token_id] = -100
+            np_labels[np_labels == self.ts_context_token_id] = -100
+            np_labels[np_labels == self.ts_end_token_id] = -100
+            labels = np_labels.tolist()
+
+        input_ids, _ = self._truncated_input_and_labels(input_ids)
+        assert (torch.tensor(input_ids) == self.ts_context_token_id).sum() == num_ts_tokens, (
+            "ERROR: ts tokens are truncated"
+        )
+
+        ret = InternS1DataItem(
+            input_ids=input_ids,
+            labels=labels,
+            ts_values=ts_values,  # type: ignore
+            ts_len=ts_len,
+            sampling_rate=sampling_rate,
+            num_tokens=len(input_ids),
+            num_ts_tokens=num_ts_tokens,
         )
         return ret
 

@@ -19,7 +19,7 @@ def get_flash_attn_varlen() -> FlashAttnVarlenProtocol:
 
         if os.environ.get("XTUNER_USE_FA3", "0") == "1":
             try:
-                from flash_attn_interface import flash_attn_3_cuda
+                from flash_attn.flash_attn_interface import flash_attn_3_cuda
             except ImportError as e:
                 raise ImportError(f"Import FlashAttention 3 failed {e}, Please install it manually.")
             from .gpu import gpu_flash_varlen_attn_v3 as flash_attn_varlen_func

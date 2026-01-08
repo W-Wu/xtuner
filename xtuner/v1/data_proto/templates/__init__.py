@@ -17,6 +17,9 @@ CHAT_TEMPLATE_MAP = {
         image_end_token="</img>",
         image_context_token="<IMG_CONTEXT>",
         video_context_token="<IMG_CONTEXT>",
+        time_series_start_token="<|ts|>",
+        time_series_end_token="<|/ts|>",
+        time_series_context_token="<TS_CONTEXT>",
         default_system="你是书生大模型，英文名是Intern-S1，是由上海人工智能实验室开发的多模态大语言模型。",
     ),
     "internvl-3.5": HybridChatTemplate(

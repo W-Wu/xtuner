@@ -168,6 +168,16 @@ def intern_s1_vl_sft_collator(
         else:
             pixel_values = None
 
+        ts_values = [i["ts_values"] for i in instance if "ts_values" in i]
+        ts_lens = [i["ts_len"] for i in instance if "ts_len" in i]
+        ts_sr = [i["sampling_rate"] for i in instance if "sampling_rate" in i]
+        if ts_values:
+            ts_lens = torch.tensor(ts_lens)
+            ts_sr = torch.tensor(ts_sr)
+        num_ts_tokens: list[int] = []
+        for data in instance:
+            num_ts_tokens.append(int(data.get("num_ts_tokens", 0)))
+
         seq_ctx = SequenceContext(
             input_ids=input_ids,  # type: ignore
             cu_seq_lens_q=cu_seq_lens,  # type: ignore
@@ -177,6 +187,10 @@ def intern_s1_vl_sft_collator(
             num_padding=pad_len,
             pixel_values=pixel_values,  # type: ignore
             num_img_tokens=num_img_tokens,
+            ts_values=ts_values,
+            ts_lens=ts_lens,
+            ts_sr=ts_sr,
+            num_ts_tokens=num_ts_tokens,
         )
         ret.append(
             {

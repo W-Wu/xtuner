@@ -32,6 +32,9 @@ class HybridChatTemplate(BaseModel):
     image_start_token: str = ""
     image_end_token: str = ""
     image_token_index: int = -100
+    time_series_context_token: str | None = None
+    time_series_start_token: str = ""
+    time_series_end_token: str = ""
 
     # Agent Chat
 

@@ -45,6 +45,10 @@ class SequenceContext:
     pixel_values: torch.FloatTensor | None
     inputs_embeds: torch.FloatTensor | None
     num_img_tokens: list[int] | None
+    # time series
+    ts_values: list[torch.FloatTensor] | None
+    ts_lens: torch.Tensor | None
+    ts_sr: torch.Tensor | None
 
     # moe routed_experts
     rollout_routed_experts: torch.Tensor | None
@@ -70,6 +74,11 @@ class SequenceContext:
         inputs_embeds: torch.FloatTensor | None = None,
         num_img_tokens: list[int] | None = None,
         rollout_routed_experts: torch.Tensor | None = None,
+        # time series
+        ts_values: list[torch.FloatTensor] | None = None,
+        ts_lens: torch.Tensor | None = None,
+        ts_sr: torch.Tensor | None = None,
+        num_ts_tokens: list[int] | None = None,
     ):
         # Only to distinguish parameters accepted by the constructor from attributes. For example, for `max_length_q`,
         # the argument can be an int, but as an attribute it can only be a tensor
@@ -98,6 +107,10 @@ class SequenceContext:
         self.inputs_embeds = inputs_embeds
         self.num_img_tokens = num_img_tokens
         self.rollout_routed_experts = rollout_routed_experts
+        self.ts_values = ts_values
+        self.ts_lens = ts_lens
+        self.ts_sr = ts_sr
+        self.num_ts_tokens = num_ts_tokens
 
         seq_lens_k = self.cu_seq_lens_k[1:] - self.cu_seq_lens_k[:-1]
         seq_lens_q = self.cu_seq_lens_q[1:] - self.cu_seq_lens_q[:-1]
@@ -193,6 +206,10 @@ class SequenceContext:
                 inputs_embeds=self.inputs_embeds,
                 num_img_tokens=self.num_img_tokens,
                 rollout_routed_experts=self.rollout_routed_experts,
+                ts_values=self.ts_values,
+                ts_lens=self.ts_lens,
+                ts_sr=self.ts_sr,
+                num_ts_tokens=self.num_ts_tokens,
             )
             return sp_seq_ctx
         else:
@@ -215,6 +232,11 @@ class SequenceContext:
         image_grid_thw = []
         position_ids = []
         rollout_routed_experts = []
+
+        ts_values = []
+        ts_lens = []
+        ts_sr = []
+
 
         for seq_ctx in sequence_context_list:
             assert seq_ctx.sequence_parallel_mesh is None
@@ -242,6 +264,12 @@ class SequenceContext:
                 image_grid_thw.append(seq_ctx.image_grid_thw)
             if seq_ctx.rollout_routed_experts is not None:
                 rollout_routed_experts.append(seq_ctx.rollout_routed_experts)
+            if seq_ctx.ts_values is not None:
+                ts_values.append(seq_ctx.ts_values)
+            if seq_ctx.ts_lens is not None:
+                ts_lens.append(seq_ctx.ts_lens)
+            if seq_ctx.ts_sr is not None:
+                ts_sr.append(seq_ctx.ts_sr)
             position_ids.append(seq_ctx.position_ids)
         assert len(set(device)) == 1, f"All sequence contexts must be on the same device. Got {set(device)}"
 
@@ -250,6 +278,10 @@ class SequenceContext:
                 pixel_values = torch.cat(pixel_values, dim=0)
         else:
             pixel_values = None
+
+        if ts_values:
+            ts_lens = torch.tensor(ts_lens)
+            ts_sr = torch.tensor(ts_sr)
 
         return cls(
             input_ids=torch.cat(packed_input_ids, dim=1) if len(packed_input_ids) > 0 else None,  # type: ignore
@@ -358,6 +390,15 @@ class SequenceContext:
 
         if self.rollout_routed_experts is not None and hasattr(self.rollout_routed_experts, "to"):
             self.rollout_routed_experts = self.rollout_routed_experts.to(device)  # type: ignore
+
+        if self.ts_values is not None and hasattr(self.ts_values[0], "to"):
+            self.ts_values = [ts_val.to(device) for ts_val in self.ts_values]
+        
+        if self.ts_lens is not None and hasattr(self.ts_lens, "to"):
+            self.ts_lens = self.ts_lens.to(device)
+
+        if self.ts_sr is not None and hasattr(self.ts_sr, "to"):
+            self.ts_sr = self.ts_sr.to(device)
 
         self.device = device
 

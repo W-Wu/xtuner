@@ -4,7 +4,7 @@ from transformers import AutoConfig
 from xtuner.v1.module.router.greedy import GreedyRouterConfig
 
 from .base import BaseModel, TransformerConfig
-from .compose.intern_s1 import InternS1BaseConfig, InternS1Config, InternS1MiniConfig
+from .compose.intern_s1 import InternS1BaseConfig, InternS1Config, InternS1MiniConfig,InternS1MiniTSConfig
 from .compose.internvl import (
     InternVL3P5Dense1BConfig,
     InternVL3P5Dense8BConfig,
@@ -32,6 +32,7 @@ model_mapping = {
     "qwen3-4B": Qwen3Dense4BConfig(),
     "intern-s1": InternS1Config(),
     "intern-s1-mini": InternS1MiniConfig(),
+    "intern-s1-mini-ts": InternS1MiniTSConfig(),
     "gpt-oss-20b": GptOss21BA3P6Config(),
     "gpt-oss-120b": GptOss117BA5P8Config(),
     "internvl-3.5-8b-hf": InternVL3P5Dense8BConfig(),
@@ -73,6 +74,7 @@ __all__ = [
     "Qwen3MoE30BA3Config",
     "InternS1Config",
     "InternS1MiniConfig",
+    "InternS1MiniTSConfig",
     "InternS1BaseConfig",
     "GptOssConfig",
     "GptOss21BA3P6Config",

@@ -40,6 +40,20 @@ class ImageContentItem(BaseModel):
         return ""
 
 
+class TimeSeriesURL(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    url: str
+    sampling_rate: Optional[int] = None
+
+
+class TimeSeriesContentItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["time_series_url"] = "time_series_url"
+    time_series_url: TimeSeriesURL
+
+    def apply_chat_template(self, *args, **kwarg) -> str:
+        return ""
+
 class VideoURL(BaseModel):
     model_config = ConfigDict(extra="forbid")
     url: str
@@ -62,7 +76,7 @@ class VideoContentItem(BaseModel):
         return ""
 
 
-MultModalContentType = Union[TextContentItem, ImageContentItem, VideoContentItem]
+MultModalContentType = Union[TextContentItem, ImageContentItem, VideoContentItem,TimeSeriesContentItem]
 ContentType = Union[str, List[MultModalContentType]]
 
 

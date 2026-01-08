@@ -18,6 +18,7 @@ from ..utils import CachableTokenizeFunction, tokenizer_xxhash
 logger = get_logger()
 
 IMAGE_TOKEN_ALIAS = "XTUNER-ALIAS-ALIAS-XTUNER-2025"
+TS_TOKEN_ALIAS = "XTUNER-ALIAS-ALIAS-XTUNER-2025-TS"
 
 
 def collect_image_video_paths_and_extra(messages: list[dict]):
@@ -83,7 +84,52 @@ def collect_image_video_paths_and_extra(messages: list[dict]):
         {"image_wh": image_wh_list, "video_wh": video_wh_list, "video_extra_info": video_extra_info_list},
     )
 
+def collect_time_series_paths_and_extra(messages: list[dict]):
+    time_series_paths = []
+    sampling_rate_list = []
+    for msg in messages:
+        if msg["role"] == "user" or msg["role"] == "pretrain":
+            content = msg["content"]
+            if isinstance(content, list):
+                for c in content:
+                    if c["type"] == "time_series_url":
+                        time_series_paths.append(c["time_series_url"]["url"])
+                        if "sampling_rate" in c["time_series_url"]:
+                            sampling_rate = c["time_series_url"]["sampling_rate"]
+                        else:
+                            sampling_rate = None
+                        sampling_rate_list.append(sampling_rate)
 
+    if len(time_series_paths) > 0:
+        assert len(time_series_paths) == len(sampling_rate_list) == 1
+    
+    return (
+        time_series_paths,
+        {"sampling_rate": sampling_rate_list},
+    )
+
+def replace_ts_token(
+    messages: ChatMessages,
+    chat_template: HybridChatTemplate,
+    num_ts_tokens: int,
+):
+    for msg in messages.messages:
+        if msg.role == "pretrain":
+            assert len(messages.messages) == 1, "pretrain message should only have one message"
+        if msg.role == "user" or msg.role == "pretrain":
+            content = msg.content
+            if isinstance(content, list):
+                for c in content:
+                    if c.type == "text":
+                        text = c.text
+                        text = text.replace("<TS_CONTEXT>", TS_TOKEN_ALIAS)
+                        ts_cnt = text.count(TS_TOKEN_ALIAS)
+                        # import ipdb; ipdb.set_trace()
+                        for i in range(ts_cnt):
+                            ts_tokens = f"{chat_template.time_series_start_token}{chat_template.time_series_context_token * num_ts_tokens}{chat_template.time_series_end_token}"  # type: ignore
+                            text = text.replace(TS_TOKEN_ALIAS, ts_tokens)
+                        c.text = text
+                        
 def replace_image_token(
     messages: ChatMessages,
     chat_template: HybridChatTemplate,
@@ -163,8 +209,14 @@ class BaseMLLMTokenizeFunction(CachableTokenizeFunction[T]):
 
     def calc_num_tokens_video_get_item(self, data_item: dict) -> CacheItem:
         raise NotImplementedError
+    
+    def calc_num_tokens_time_series_get_item(self, data_item: dict) -> CacheItem:
+        raise NotImplementedError
 
     def video_get_item(self, data_item: dict, media_root: str = "") -> BaseMLLMDataItem:
+        raise NotImplementedError
+    
+    def time_series_get_item(self, data_item: dict, media_root: str = "") -> BaseMLLMDataItem:
         raise NotImplementedError
 
     def calc_num_tokens_pure_text_get_item(self, data_item) -> CacheItem:
@@ -194,6 +246,8 @@ class BaseMLLMTokenizeFunction(CachableTokenizeFunction[T]):
             self._image_wh_list = extra_info["image_wh"]
             self._video_wh_list = extra_info["video_wh"]
             self._video_extra_info_list = extra_info["video_extra_info"]
+            self._time_series_path, time_series_extra_info = collect_time_series_paths_and_extra(item["messages"])
+            self._time_series_sampling_rate = time_series_extra_info["sampling_rate"]
         except RuntimeError as e:
             if self.state == "cache":
                 print(f"!!!! RuntimeError: {e} of {self.data_name} when tokenize cache item. skip {item}!")
@@ -211,6 +265,12 @@ class BaseMLLMTokenizeFunction(CachableTokenizeFunction[T]):
                 ret = self.calc_num_tokens_video_get_item(item)
             else:
                 ret = self.video_get_item(item, media_root)
+        elif len(self._time_series_path) > 0:
+            assert len(self._time_series_path)==1, "Currently only one time series input is supported."
+            if self.state == "cache":
+                ret = self.calc_num_tokens_time_series_get_item(item)
+            else:
+                ret = self.time_series_get_item(item, media_root)
         else:
             if self.state == "cache":
                 ret = self.calc_num_tokens_pure_text_get_item(item)
