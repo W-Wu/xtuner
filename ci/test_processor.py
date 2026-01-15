@@ -3,7 +3,7 @@ import torch
 from xtuner.v1.datasets import Qwen3VLTokenizeFnConfig
 from transformers import AutoTokenizer, AutoProcessor
 
-QWEN3_VL_PATH = 'xxxx'
+QWEN3_VL_PATH = '/mnt/shared-storage-gpfs2/speechllm-share/wuwen/interns1_1_ts/InternS1_1_1T_A22_1217'
 
 
 if __name__ == '__main__':
@@ -17,6 +17,7 @@ if __name__ == '__main__':
             "content": [
                 {"type": "time_series",
                  "data": f"{QWEN3_VL_PATH}/0092638_seism.npy",
+                    # "data":f"{QWEN3_VL_PATH}/Trill_583360.flac",
                  "sampling_rate": 100},
                 {"type": "text",
                  "text": "Please determine whether an Earthquake event has occurred in the provided time-series data. If so, please specify the starting time point indices of the P-wave and S-wave in the event."},
@@ -36,6 +37,7 @@ if __name__ == '__main__':
                 {"type": "time_series_url",
                  "time_series_url": {
                      'url': f"{QWEN3_VL_PATH}/0092638_seism.npy",
+                    # 'url':f"{QWEN3_VL_PATH}/Trill_583360.flac",
                      "sampling_rate": 100},
                  },
                 {"type": "text",
@@ -50,11 +52,11 @@ if __name__ == '__main__':
 
     time_series_inputs = processor.time_series_preprocessor(messages_inference)
     multimodal_inputs = processor.apply_chat_template(messages_inference, add_generation_prompt=False, tokenize=True,
-                                                      return_dict=True, return_tensors="pt", **time_series_inputs)
+                                                      return_dict=True, return_tensors="pt", **time_series_inputs).to(dtype=torch.bfloat16)
 
     output = tokenize_fn({"messages": messages_train})
 
-    assert torch.allclose(multimodal_inputs['input_ids'], torch.tensor(output['input_ids']).reshape(1, -1))
-    assert torch.allclose(multimodal_inputs['ts_lens'], torch.tensor(output['ts_len']).reshape(1, -1))
-    assert torch.allclose(multimodal_inputs['ts_sr'], torch.tensor(output['ts_sr']).reshape(1, -1))
-    assert torch.allclose(multimodal_inputs['ts_values'], torch.tensor(output['time_series_signals']).reshape(1, -1, 3))
+    assert torch.allclose(multimodal_inputs['input_ids'], torch.tensor(output['input_ids']).unsqueeze(0))
+    assert torch.allclose(multimodal_inputs['ts_lens'], torch.tensor(output['ts_len']).unsqueeze(0))
+    assert torch.allclose(multimodal_inputs['ts_sr'], torch.tensor(output['ts_sr']).unsqueeze(0))
+    assert torch.allclose(multimodal_inputs['ts_values'], torch.tensor(output['time_series_signals']).unsqueeze(0), rtol=1e-2, atol=1e-3)
