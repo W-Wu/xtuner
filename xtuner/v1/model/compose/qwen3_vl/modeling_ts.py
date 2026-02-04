@@ -79,6 +79,10 @@ class Qwen3VLTimeSeriesModel(BaseModel):
             for param in self.parameters():
                 param.requires_grad = False
 
+        self.time_series.encoder_embed.transformer_encoder = checkpoint_wrapper(self.time_series.encoder_embed.transformer_encoder,
+            preserve_rng_state=True,
+            checkpoint_impl=CheckpointImpl.REENTRANT)
+
         checkpoint_preserve_rng_state = fsdp_config.checkpoint_preserve_rng_state
         num_recompute_layers = int(len(self.time_series.encoder.layers) * fsdp_config.vision_recompute_ratio)
         for layer_idx in tqdm(list(range(len(self.time_series.encoder.layers))), desc="[TimeSeries Fully Shard]"):

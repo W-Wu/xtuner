@@ -202,6 +202,7 @@ class TrainEngine:
                 f"Total trainable parameters: {num_total_requires_grad // 1e6}M, total parameters: {num_total // 1e6}M"
             )
             logger.info(f"Untrainable parameters names: {untrainable_names}")
+            logger.info(f"Trainable parameters names: {trainable_names}")
         return optim_cfg.build(params)
 
     @property

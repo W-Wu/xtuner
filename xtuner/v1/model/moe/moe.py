@@ -871,7 +871,8 @@ class MoE(BaseModel):
             if isinstance(module, MoEBlock):
                 return
             for name, param in module.named_parameters(recurse=False):
-                dist_param = nn.Parameter(distribute_tensor(param, self.ep_mesh, [Replicate()]))
+                requires_grad = param.requires_grad
+                dist_param = nn.Parameter(distribute_tensor(param, self.ep_mesh, [Replicate()]), requires_grad=requires_grad)
                 module.register_parameter(name, dist_param)
             for child in module.children():
                 traverse(child)
