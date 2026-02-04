@@ -8,12 +8,12 @@ from typing import List, Dict, Any
 
 
 DETECTION_DICT = {
-    "GWOSC GW Event": {"false": ['no', 'not'], "true": []},
-    "MDD": {"false": ["healthy"], "true": ["depressive"]},
+    "GWOSC GW Event": {"false": ['no', 'not','没有','未'], "true": []},
+    "MDD": {"false": ["healthy","没有"], "true": ["depressive","患有"]},
     "MIMII Due": {"false": ['normal'], "true": ['anomaly']},
-    "STEAD": {"false": ['no', 'not'], "true": []},
-    "TIMECAP": {"false": ['not'], "true": []},
-    "TS_MQA": {"false": ['normal'], "true": ['anomaly']},
+    "STEAD": {"false": ['no', 'not','没有','未'], "true": []},
+    "TIMECAP": {"false": ['not',"不会"], "true": []},
+    "TS_MQA": {"false": ['normal','no anomalies',"正常"], "true": ['anomaly','anomalous',"异常"]},
 }
 
 
@@ -223,6 +223,8 @@ def detect(generated_text, dataset_name):
     true_indicators = detection_config.get("true", [])
     
     generated_lower = generated_text.lower()
+
+    # import pdb; pdb.set_trace()
     
     # 1. 如果在生成内容中检测到false的list中的任意一个，就认为是false
     for indicator in false_indicators:
@@ -443,6 +445,8 @@ def evaluate_all_files(input_folder: str, output_csv: str):
             first_item = data_list[0]
             dataset_name = first_item.get('dataset_name', '')
             task = first_item.get('task', '').lower()
+
+            # if dataset_name !="TS_MQA": continue
             
             # 根据数据集类型调用相应的评估函数
             result_row = {'filename': filename}
